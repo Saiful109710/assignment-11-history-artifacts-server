@@ -32,6 +32,13 @@ async function run() {
     const artifactsInfo = client.db('artifactsInfo').collection('All_Artifacts')
 
 
+    app.get('/featuredArtifacts',async(req,res)=>{
+        const result = await artifactsInfo.find().toArray();
+        res.send(result)
+    })
+
+    // get all artifacts data api
+
     app.get('/allArtifacts',async(req,res)=>{
         const result = await artifactsInfo.find().toArray();
         res.send(result)
@@ -41,6 +48,51 @@ async function run() {
         const id = req.params.id;
         const query = {_id:new ObjectId(id)}
         const result =await artifactsInfo.findOne(query)
+        res.send(result)
+    })
+
+    // my added artifacts
+    app.get('/myArtifacts/:email',async(req,res)=>{
+        const email = req.params.email;
+        const query = {adderEmail:email}
+        const result = await artifactsInfo.find(query).toArray();
+        res.send(result)
+    })
+
+
+    // delete artifacts data
+
+    app.delete('/myArtifacts/:id',async(req,res)=>{
+            const id = req.params.id;
+            const query = {_id:new ObjectId(id)}
+            const result = await artifactsInfo.deleteOne(query)
+            res.send(result)
+
+    })
+
+    // update artifacts data
+
+    app.patch('/myArtifacts/:id',async(req,res)=>{
+      const id = req.params.id;
+      const data = req.body
+      console.log(data)
+      const query = {_id:new ObjectId(id)}
+      const updatedDoc = {
+        $set:data
+      }
+      const result = await artifactsInfo.updateOne(query,updatedDoc)
+      res.send(result)
+    })
+    
+
+
+   
+
+    // add artifacts post api
+
+    app.post('/allArtifacts',async(req,res)=>{
+        const data = req.body;
+        const result = await artifactsInfo.insertOne(data);
         res.send(result)
     })
     
