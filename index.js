@@ -3,6 +3,7 @@ const cors = require('cors')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 const jwt = require('jsonwebtoken')
+const cookieParser = require('cookie-parser')
 
 const app = express();
 
@@ -11,13 +12,39 @@ const port = process.env.PORT || 2000
 // middleware
 
 const corsOptions = {
-  origin:['http://localhost:5173'],
+  origin:['http://localhost:5173','https://history-artifactsassignment-11.netlify.app'],
   credentials:true,
   optionalSuccessStatus:200
 }
 
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+};
+
 app.use(cors(corsOptions))
 app.use(express.json())
+app.use(cookieParser())
+
+// jwt verify token
+
+const verifyToken = (req,res,next)=>{
+    const token = req.cookies?.token
+    if(!token){
+      return res.status(401).send({message:'Unauthorized access'})
+    }
+
+    jwt.verify(token,process.env.SECRET_KEY,(err,decoded)=>{
+      if(err){
+        return res.status(401).send({message:'Unauthorized access'})
+      }
+      req.user = decoded
+      
+    })
+    next()
+    
+}
 
 
 
@@ -47,22 +74,14 @@ async function run() {
       const token = jwt.sign(email,process.env.SECRET_KEY,{expiresIn:'6h'})
       console.log(token)
       res
-      .cookie('token',token,{
-        httpOnly:true,
-        secure:process.env.NODE_ENV === 'production',
-        sameSite:process.env.NODE_ENV === 'production' ? 'none' : 'strict'
-      })
+      .cookie('token',token,cookieOptions)
       .send({success:true})
     })
 
     // remove cookie 
     app.get('/logout',async(req,res)=>{
         res
-        .clearCookie('token',{
-          maxAge:0,
-          secure:process.env.NODE_ENV === 'production',
-          sameSite:process.env.NODE_ENV === 'production' ? 'none' : 'strict'
-        })
+        .clearCookie('token',{...cookieOptions,maxAge:0})
         .send({success:true})
     })
 
@@ -79,7 +98,10 @@ async function run() {
         console.log(category)
         const search = req.query.search;
         console.log(search)
-        let query = {artifactName:{$regex:search,$options:'i'}}
+        let query = {}
+        if(search){
+          query.artifactName={$regex:search,$options:'i'}
+        }
         if(category) query.artifactType = category
         const result = await artifactsInfo.find(query).toArray();
         res.send(result)
@@ -95,8 +117,17 @@ async function run() {
     })
 
     // my added artifacts
-    app.get('/myArtifacts/:email',async(req,res)=>{
+    app.get('/myArtifacts/:email',verifyToken,async(req,res)=>{
+        const decodedEmail = req.user?.email
         const email = req.params.email;
+
+        console.log('email from token',decodedEmail)
+        console.log('email from params',email)
+
+        if(decodedEmail !== email){
+          return res.status(401).send({message:'Unauthorized access'})
+        }
+        
         const query = {adderEmail:email}
         const result = await artifactsInfo.find(query).toArray();
         res.send(result)
@@ -197,8 +228,8 @@ async function run() {
             res.send(result)
       })
     
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
