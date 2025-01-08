@@ -2,6 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
+const jwt = require('jsonwebtoken')
 
 const app = express();
 
@@ -9,7 +10,13 @@ const port = process.env.PORT || 2000
 
 // middleware
 
-app.use(cors())
+const corsOptions = {
+  origin:['http://localhost:5173'],
+  credentials:true,
+  optionalSuccessStatus:200
+}
+
+app.use(cors(corsOptions))
 app.use(express.json())
 
 
@@ -32,15 +39,49 @@ async function run() {
     const artifactsInfo = client.db('artifactsInfo').collection('All_Artifacts')
 
 
+    // generate jwt
+
+    app.post('/jwt',async(req,res)=>{
+      const email = req.body;
+      // create token
+      const token = jwt.sign(email,process.env.SECRET_KEY,{expiresIn:'6h'})
+      console.log(token)
+      res
+      .cookie('token',token,{
+        httpOnly:true,
+        secure:process.env.NODE_ENV === 'production',
+        sameSite:process.env.NODE_ENV === 'production' ? 'none' : 'strict'
+      })
+      .send({success:true})
+    })
+
+    // remove cookie 
+    app.get('/logout',async(req,res)=>{
+        res
+        .clearCookie('token',{
+          maxAge:0,
+          secure:process.env.NODE_ENV === 'production',
+          sameSite:process.env.NODE_ENV === 'production' ? 'none' : 'strict'
+        })
+        .send({success:true})
+    })
+
+
     app.get('/featuredArtifacts',async(req,res)=>{
-        const result = await artifactsInfo.find().toArray();
+        const result = await artifactsInfo.find().sort({likeCount:-1}).limit(6).toArray();
         res.send(result)
     })
 
     // get all artifacts data api
 
     app.get('/allArtifacts',async(req,res)=>{
-        const result = await artifactsInfo.find().toArray();
+        const category = req.query.filter
+        console.log(category)
+        const search = req.query.search;
+        console.log(search)
+        let query = {artifactName:{$regex:search,$options:'i'}}
+        if(category) query.artifactType = category
+        const result = await artifactsInfo.find(query).toArray();
         res.send(result)
     })
 
