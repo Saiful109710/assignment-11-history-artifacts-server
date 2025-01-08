@@ -44,6 +44,8 @@ async function run() {
         res.send(result)
     })
 
+  
+
     app.get('/artifactDetails/:id',async(req,res)=>{
         const id = req.params.id;
         const query = {_id:new ObjectId(id)}
@@ -74,13 +76,15 @@ async function run() {
 
     app.patch('/myArtifacts/:id',async(req,res)=>{
       const id = req.params.id;
+      
       const data = req.body
-      console.log(data)
+      
       const query = {_id:new ObjectId(id)}
       const updatedDoc = {
         $set:data
       }
       const result = await artifactsInfo.updateOne(query,updatedDoc)
+      
       res.send(result)
     })
     
@@ -95,6 +99,62 @@ async function run() {
         const result = await artifactsInfo.insertOne(data);
         res.send(result)
     })
+
+    // increase like and decrease like count
+
+      app.patch('/allArtifacts/:id',async(req,res)=>{
+        const id = req.params.id
+        const {userId} = req.body
+        const likeStatus = req.query.likeStatus
+        console.log(likeStatus)
+        console.log(userId)
+        
+        const query = {_id:new ObjectId(id)}
+        const artifactsData = await artifactsInfo.findOne(query)
+       
+        const updateDoc = {}
+        if(likeStatus==='like'){
+          if(artifactsData.likedBy &&  artifactsData.likedBy.includes(userId)){
+            return res.status(400).send({message:'You already like this artifact'})
+        }
+            updateDoc.$inc={likeCount:1},
+            updateDoc.$push={likedBy:userId}
+
+            if(artifactsData.disLikedBy && artifactsData.disLikedBy.includes(userId)){
+                updateDoc.$inc = {...updateDoc.$inc,disLikedCount:-1},
+                updateDoc.$pull = {disLikedBy:userId}
+            }
+        }
+
+        if(likeStatus === 'dislike'){
+            if(artifactsData.disLikedBy && artifactsData.disLikedBy.includes(userId)){
+              return res.status(400).send({message:'you already dislike this artifacts'})
+            }
+
+            updateDoc.$inc = {disLikedCount:1},
+            updateDoc.$push = {disLikedBy:userId}
+
+            if(artifactsData.likedBy && artifactsData.likedBy.includes(userId)){
+                updateDoc.$inc = {...updateDoc.$inc,likeCount:-1},
+                updateDoc.$pull = {likedBy:userId}
+            }
+        }
+
+
+        const updateLikeCount = await artifactsInfo.updateOne(query,updateDoc)
+        res.send(updateLikeCount)
+
+
+      })
+
+      // liked artifacts data
+
+      app.get('/likedArtifacts/:userId',async(req,res)=>{
+            const userId = req.params.userId
+            const query = {likedBy:userId}
+            const result = await artifactsInfo.find(query).toArray()
+            res.send(result)
+      })
     
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
